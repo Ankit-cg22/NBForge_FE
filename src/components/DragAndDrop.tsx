@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Upload, Button, message } from "antd";
 import type { UploadFile } from "antd";
 import { UploadOutlined, DownloadOutlined, SyncOutlined } from "@ant-design/icons";
-// import axios from "axios"; // Uncomment if axios is installed
+import api from "../api";
 
 const { Dragger } = Upload;
 
@@ -22,9 +22,10 @@ const DragAndDrop: React.FC = () => {
   };
 
   const onChange = (info: any) => {
-    // Filter only .ipynb files
+    // Always keep only the latest .ipynb file
     const validFiles = info.fileList.filter((f: UploadFile) => f.name.endsWith(".ipynb"));
-    setFileList(validFiles);
+    const latestFile = validFiles.length > 0 ? [validFiles[validFiles.length - 1]] : [];
+    setFileList(latestFile);
     setDownloadUrl(null); // Reset download when new file is uploaded
   };
 
@@ -33,26 +34,43 @@ const DragAndDrop: React.FC = () => {
     setConvertLoading(true);
     setDownloadUrl(null);
     setDownloadFileName("");
-    // const formData = new FormData();
-    // formData.append("file", fileList[0] as any);
+    const fileObj = fileList[0].originFileObj;
+    if (!fileObj) {
+      message.error("File data missing. Please re-upload.");
+      setConvertLoading(false);
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", fileObj, fileList[0].name);
     try {
-      // Replace with your backend endpoint and uncomment axios code if axios is installed
-      // const response = await axios.post("/api/convert", formData, {
-      //   responseType: "blob",
-      //   headers: { "Content-Type": "multipart/form-data" },
-      // });
-      // const url = window.URL.createObjectURL(new Blob([response.data]));
-      // setDownloadUrl(url);
-      // setDownloadFileName("converted_notebook.zip"); // or response filename
-      // message.success("Notebook converted! Download is ready.");
-      setTimeout(() => {
-        setDownloadUrl("/dummy/converted_notebook.zip");
-        setDownloadFileName("converted_notebook.zip");
-        message.success("Notebook converted! Download is ready.");
+      const response = await api.post("/convert", formData, {
+        responseType: "blob",
+        headers: { "Content-Type": "multipart/form-data" },
+        validateStatus: () => true, // Accept 201 as valid
+      });
+      if (response.status !== 201) {
+        message.error("Conversion failed. Please try again.");
         setConvertLoading(false);
-      }, 1500);
+        return;
+      }
+      // Set filename to match uploaded file, replacing .ipynb with .zip
+      let filename = "converted_notebook.zip";
+      if (fileList[0]?.name) {
+        filename = fileList[0].name.replace(/\.ipynb$/i, ".zip");
+      }
+      // If backend provides a filename, prefer that
+      if (response.headers["content-disposition"]) {
+        const contentDisposition = response.headers["content-disposition"];
+        const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/);
+        if (match) filename = match[1];
+      }
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/zip" }));
+      setDownloadUrl(url);
+      setDownloadFileName(filename);
+      message.success("Notebook converted! Download is ready.");
     } catch (error) {
       message.error("Conversion failed. Please try again.");
+    } finally {
       setConvertLoading(false);
     }
   };
@@ -61,7 +79,7 @@ const DragAndDrop: React.FC = () => {
     if (downloadUrl) {
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.setAttribute("download", "converted_notebook.zip");
+      link.setAttribute("download", downloadFileName || "converted_notebook.zip");
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -78,6 +96,7 @@ const DragAndDrop: React.FC = () => {
         onChange={onChange}
         accept=".ipynb"
         style={{ width: 300, padding: 16 }}
+        maxCount={1}
       >
         <p className="ant-upload-drag-icon">
           <UploadOutlined style={{ fontSize: 32 }} />
@@ -96,7 +115,7 @@ const DragAndDrop: React.FC = () => {
         Convert Notebook
       </Button>
       {downloadUrl && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 300, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, padding: '12px 16px', marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: 'fit-content', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, padding: '12px 16px', marginTop: 8 }}>
           <span style={{ fontWeight: 500, color: '#389e0d' }}>{downloadFileName}</span>
           <Button
             type="primary"

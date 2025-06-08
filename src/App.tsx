@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Row, Col, Card, ConfigProvider, theme as antdTheme } from 'antd';
 import TopBar from './components/TopBar';
 import DragAndDrop from './components/DragAndDrop';

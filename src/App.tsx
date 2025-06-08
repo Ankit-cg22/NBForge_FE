@@ -9,16 +9,17 @@ function App() {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    fetch('/src/assets/instructions.md')
+    fetch('/instructions.md') // Fetch from the public directory
       .then(res => res.text())
-      .then(setInstructions);
+      .then(setInstructions)
+      .catch((err) => console.error("Failed to fetch instructions:", err));
   }, []);
 
   const toggleDarkMode = () => setDarkMode((prev) => !prev);
 
   return (
     <ConfigProvider
-      theme={{
+      theme={{        
         algorithm: darkMode ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
       }}
     >
